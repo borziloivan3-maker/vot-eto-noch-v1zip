@@ -7,8 +7,9 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parent
 PUBLIC_FILES = {
     "index.html", "styles.css", "app.js", "game-data.js",
-    "game-engine.js", "storage.js",
+    "game-engine.js", "storage.js", "author/players.json",
 }
+PLAYER_AVATAR_FILES = {f"author/players/{slot}.jpg" for slot in range(1, 7)}
 
 
 class GameHandler(SimpleHTTPRequestHandler):
@@ -23,7 +24,7 @@ class GameHandler(SimpleHTTPRequestHandler):
             self.send_error(404)
             return None
         parts = target.relative_to(ROOT).parts
-        allowed = relative in PUBLIC_FILES or (
+        allowed = relative in PUBLIC_FILES or relative in PLAYER_AVATAR_FILES or (
             len(parts) > 2
             and parts[0] == "games"
             and parts[1] in {"1", "2", "3", "4", "5", "6"}
@@ -31,6 +32,10 @@ class GameHandler(SimpleHTTPRequestHandler):
         )
         if not allowed:
             self.send_error(404)
+            return None
+        if self.command == "HEAD" and relative in PLAYER_AVATAR_FILES and not target.is_file():
+            self.send_response(204)
+            self.end_headers()
             return None
         if target.is_dir() and not (target / "index.html").is_file():
             self.send_error(404)

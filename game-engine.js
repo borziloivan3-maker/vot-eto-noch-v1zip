@@ -40,19 +40,33 @@ export function shuffleRoomGameSets(random = Math.random, previous = null) {
   return result;
 }
 
-export function initializeGameState(names, { random = Math.random, previousRoomGameSets = null } = {}) {
-  if (!Array.isArray(names) || names.length < 4 || names.length > 6) {
+export function initializeGameState(roster, { random = Math.random, previousRoomGameSets = null } = {}) {
+  if (!Array.isArray(roster) || roster.length < 4 || roster.length > 6) {
     throw new Error("Для игры нужно от 4 до 6 игроков.");
   }
-  const normalizedNames = names.map((name) => String(name).trim());
-  if (normalizedNames.some((name) => !name)) throw new Error("Введите имя каждого игрока.");
-  if (new Set(normalizedNames.map((name) => name.toLocaleLowerCase("ru"))).size !== normalizedNames.length) {
+  const normalizedRoster = roster.map((entry, index) => {
+    const profile = typeof entry === "string"
+      ? { id: String(index + 1), name: entry }
+      : entry;
+    if (!profile || typeof profile !== "object") {
+      throw new Error("Проверьте состав игроков.");
+    }
+    return {
+      id: String(profile.id ?? index + 1),
+      name: String(profile.name ?? "").trim(),
+      avatar: typeof profile.avatar === "string" && profile.avatar ? profile.avatar : null,
+    };
+  });
+  if (normalizedRoster.some(({ name }) => !name)) throw new Error("Введите имя каждого игрока.");
+  if (new Set(normalizedRoster.map(({ name }) => name.toLocaleLowerCase("ru"))).size !== normalizedRoster.length) {
     throw new Error("Имена игроков должны различаться.");
   }
+  if (new Set(normalizedRoster.map(({ id }) => id)).size !== normalizedRoster.length) {
+    throw new Error("ID игроков должны различаться.");
+  }
 
-  const players = normalizedNames.map((name) => ({
-    id: makeId(),
-    name,
+  const players = normalizedRoster.map((profile) => ({
+    ...profile,
     active: true,
     cluesReceived: 0,
     wins: 0,
@@ -85,8 +99,8 @@ export function initializeGameState(names, { random = Math.random, previousRoomG
   };
 }
 
-export function createGame(names, options = {}) {
-  return initializeGameState(names, options);
+export function createGame(roster, options = {}) {
+  return initializeGameState(roster, options);
 }
 
 export function startTurn(gameState, random = Math.random) {

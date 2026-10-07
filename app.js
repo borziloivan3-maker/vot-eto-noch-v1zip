@@ -20,8 +20,9 @@ const stateFromStorage = loadSavedSession();
 let gameState = stateFromStorage.gameState;
 let previousRoomGameSets = stateFromStorage.previousRoomGameSets;
 let isLaunchingMiniGame = false;
-let selectedPlayerCount = 4;
-let setupNames = ["", "", "", ""];
+let configuredPlayers = [];
+let rosterLoading = true;
+let rosterError = "";
 let notice = "";
 
 const returnParams = new URLSearchParams(location.search);
@@ -50,6 +51,75 @@ const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (character) => (
   '"': "&quot;",
   "'": "&#39;",
 })[character]);
+
+const PLAYER_SLOT_IDS = ["1", "2", "3", "4", "5", "6"];
+
+async function loadConfiguredPlayers() {
+  const configResponse = await fetch("./author/players.json", { cache: "no-store" });
+  if (!configResponse.ok) throw new Error("Не удалось загрузить author/players.json.");
+  const config = await configResponse.json();
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    throw new Error("Проверьте формат author/players.json.");
+  }
+
+  const slots = await Promise.all(PLAYER_SLOT_IDS.map(async (id) => {
+    const avatar = `./author/players/${id}.jpg`;
+    try {
+      let response = await fetch(avatar, { method: "HEAD", cache: "no-store" });
+      if (response.status === 405 || response.status === 501) {
+        response = await fetch(avatar, { cache: "no-store" });
+      }
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`Не удалось проверить фотографию игрока ${id}.`);
+      }
+      return { id, avatar, exists: response.ok && response.status !== 204 };
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Не удалось проверить фотографию")) {
+        throw error;
+      }
+      throw new Error("Не удалось проверить фотографии игроков.");
+    }
+  }));
+
+  let lastActiveSlot = -1;
+  slots.forEach((slot, index) => {
+    if (slot.exists) lastActiveSlot = index;
+  });
+  if (lastActiveSlot < 0) {
+    throw new Error("Добавьте фотографии минимум четырёх игроков: 1.jpg–4.jpg.");
+  }
+  if (slots.slice(0, lastActiveSlot + 1).some(({ exists }) => !exists)) {
+    throw new Error("Проверьте фотографии игроков. Игроки должны идти последовательно от 1.");
+  }
+  if (lastActiveSlot + 1 < 4) {
+    throw new Error("Для игры нужны фотографии как минимум четырёх игроков: 1.jpg–4.jpg.");
+  }
+
+  const players = slots.slice(0, lastActiveSlot + 1).map(({ id, avatar }) => {
+    const name = config[id]?.name;
+    if (typeof name !== "string" || !name.trim()) {
+      throw new Error(`Укажите имя игрока ${id} в author/players.json.`);
+    }
+    return { id, name: name.trim(), avatar };
+  });
+  if (new Set(players.map(({ name }) => name.toLocaleLowerCase("ru"))).size !== players.length) {
+    throw new Error("Имена игроков в author/players.json должны различаться.");
+  }
+  return players;
+}
+
+function renderPlayer(player, size = "regular") {
+  if (!player) return "";
+  const avatar = typeof player.avatar === "string" && player.avatar
+    ? `<img class="player-avatar" src="${escapeHTML(player.avatar)}" alt="" aria-hidden="true">`
+    : "";
+  return `
+    <span class="player-identity player-identity--${size}">
+      ${avatar}
+      <span class="player-identity__name">${escapeHTML(player.name ?? "")}</span>
+    </span>
+  `;
+}
 
 const playerById = (id) => gameState?.players.find((player) => player.id === id);
 const currentPlayer = () => playerById(gameState?.currentPlayerId);
@@ -137,33 +207,25 @@ function renderTopbar() {
 }
 
 function renderSetup() {
-  const inputs = setupNames.slice(0, selectedPlayerCount).map((name, index) => `
-    <input
-      class="name-input"
-      type="text"
-      maxlength="28"
-      autocomplete="off"
-      placeholder="Имя игрока ${index + 1}"
-      aria-label="Имя игрока ${index + 1}"
-      data-name-index="${index}"
-      value="${escapeHTML(name)}"
-    />
-  `).join("");
+  const rosterContent = rosterLoading
+    ? '<p class="lead">Загружаем состав игроков…</p>'
+    : rosterError
+      ? `<p class="notice" role="alert">${escapeHTML(rosterError)}</p>`
+      : `
+        <div class="player-roster">
+          ${configuredPlayers.map((player) => `
+            <div class="player-roster-item">${renderPlayer(player)}</div>
+          `).join("")}
+        </div>
+      `;
+  const disabled = rosterLoading || Boolean(rosterError) || configuredPlayers.length < 4;
   return `
     <section class="content">
       <div class="eyebrow">Игроки</div>
       <h1>Соберите<br>компанию.</h1>
-      <p class="lead">Введите имена участников расследования.</p>
-      <span class="field-label">Количество игроков</span>
-      <div class="count-picker" role="group" aria-label="Количество игроков">
-        ${[4, 5, 6].map((count) => `
-          <button class="count-button" data-action="player-count" data-count="${count}" aria-pressed="${selectedPlayerCount === count}">
-            ${count === 4 ? "4 игрока" : `${count} игроков`}
-          </button>
-        `).join("")}
-      </div>
-      <div class="name-list">${inputs}</div>
-      <div class="button-stack">${actionButton("НАЧАТЬ ИГРУ", "start-game")}</div>
+      <p class="lead">Участники расследования.</p>
+      ${rosterContent}
+      <div class="button-stack">${actionButton("НАЧАТЬ ИГРУ", "start-game", "primary-button", disabled ? "disabled" : "")}</div>
     </section>
   `;
 }
@@ -204,7 +266,7 @@ function renderOpponentPicker() {
       const blocked = player.id === previousPair;
       return `
         <button class="player-button" data-action="select-opponent" data-id="${player.id}" ${blocked ? "disabled" : ""}>
-          ${escapeHTML(player.name)}
+          ${renderPlayer(player, "compact")}
           ${blocked ? '<span class="button-note">Соперник предыдущего вызова</span>' : ""}
         </button>
       `;
@@ -227,7 +289,7 @@ function renderTurn() {
       <div class="turn-heading">
         <div>
           <div class="eyebrow">Ход игрока</div>
-          <h1>${escapeHTML(currentPlayer()?.name ?? "")}</h1>
+          <h1>${renderPlayer(currentPlayer(), "large")}</h1>
         </div>
         <div class="turn-number">ХОД ${gameState.turnNumber}</div>
       </div>
@@ -259,10 +321,10 @@ function renderWinnerPick() {
       <p class="lead">Выберите победителя. Награда будет выдана автоматически.</p>
       <div class="choice-grid">
         <button class="choice-button" data-action="winner" data-id="${caller?.id}">
-          ${escapeHTML(caller?.name ?? "")}
+          ${renderPlayer(caller, "compact")}
         </button>
         <button class="choice-button" data-action="winner" data-id="${opponent?.id}">
-          ${escapeHTML(opponent?.name ?? "")}
+          ${renderPlayer(opponent, "compact")}
         </button>
       </div>
     </section>
@@ -278,11 +340,11 @@ function renderReward() {
     `
     : `
       <div class="bonus-mark">БОНУС</div>
-      <p class="lead">Физический жетон получает ${escapeHTML(winner?.name ?? "")}.</p>
+      <p class="lead">Физический жетон получает ${renderPlayer(winner, "compact")}.</p>
     `;
   return `
     <section class="content">
-      <div class="eyebrow">Победитель · ${escapeHTML(winner?.name ?? "")}</div>
+      <div class="eyebrow">Победитель · ${renderPlayer(winner, "compact")}</div>
       <h1>Награда.</h1>
       <article class="card">${contents}</article>
       <div class="button-stack">${actionButton("ПРОДОЛЖИТЬ", "continue")}</div>
@@ -298,7 +360,7 @@ function renderAccusationPick() {
       <div class="player-list">
         ${gameState.players.map((player) => `
             <button class="player-button" data-action="pick-accusation" data-id="${player.id}">
-              ${escapeHTML(player.name)}
+              ${renderPlayer(player, "compact")}
             </button>
           `).join("")}
       </div>
@@ -313,7 +375,7 @@ function renderAccusationConfirm() {
     <section class="content center-card">
       <div class="eyebrow">Подтвердите обвинение</div>
       <h1>Вы уверены?</h1>
-      <p class="confirmation">Вы обвиняете ${escapeHTML(target?.name ?? "")}?</p>
+      <p class="confirmation">Вы обвиняете ${renderPlayer(target, "compact")}?</p>
       <div class="button-stack">
         ${actionButton("ПОДТВЕРДИТЬ", "confirm-accusation")}
         ${actionButton("НАЗАД", "back-to-accusation", "secondary-button")}
@@ -329,7 +391,7 @@ function renderWrongAccusation() {
       <div class="big-mark">×</div>
       <div class="eyebrow">Обвинение не подтвердилось</div>
       <h1>Неверно.</h1>
-      <p class="lead">${escapeHTML(accused?.name ?? "Игрок")} выбывает из расследования.</p>
+      <p class="lead">${accused ? renderPlayer(accused, "compact") : "Игрок"} выбывает из расследования.</p>
       <div class="button-stack">${actionButton("ПЕРЕДАТЬ ХОД", "continue")}</div>
     </section>
   `;
@@ -342,7 +404,7 @@ function renderVictory() {
       <div class="big-mark">✓</div>
       <div class="eyebrow">Расследование завершено</div>
       <h1>Вы нашли виновника.</h1>
-      <p class="lead">${escapeHTML(winner?.name ?? "")} раскрыл дело.</p>
+      <p class="lead">${renderPlayer(winner, "compact")} раскрыл дело.</p>
       ${renderCaseReveal(true)}
       <div class="button-stack">${actionButton("НОВАЯ ПАРТИЯ", "new-game")}</div>
     </section>
@@ -364,10 +426,10 @@ function renderCaseReveal(includeReason = false) {
   return `
     <article class="card" style="text-align:left">
       <div class="eyebrow">Жертва</div>
-      <h2>${escapeHTML(victim()?.name ?? "")}</h2>
+      <h2>${renderPlayer(victim(), "large")}</h2>
       <p class="event-description">${escapeHTML(eventDescription())}</p>
       <div class="eyebrow section-space">Виновник</div>
-      <h2>${escapeHTML(culprit()?.name ?? "")}</h2>
+      <h2>${renderPlayer(culprit(), "large")}</h2>
       ${includeReason ? `
         <div class="eyebrow section-space">Почему?</div>
         <p class="event-description">${escapeHTML(reasonDescription())}</p>
@@ -452,15 +514,14 @@ async function discoverMiniGames(setId) {
 }
 
 function startNewGame() {
-  const names = gameState?.players.map(({ name }) => name);
-  if (!names?.length) {
+  if (!gameState?.players.length) {
     resetGame();
     return;
   }
-  gameState = createGame(names, { previousRoomGameSets });
+  if (rosterLoading) throw new Error("Состав игроков ещё загружается.");
+  if (rosterError) throw new Error(rosterError);
+  gameState = createGame(configuredPlayers, { previousRoomGameSets });
   previousRoomGameSets = gameState.roomGameSets;
-  selectedPlayerCount = names.length;
-  setupNames = [...names];
   notice = "";
   const url = new URL(window.location.href);
   url.search = "";
@@ -473,8 +534,6 @@ function startNewGame() {
 function resetGame() {
   clearSavedSession();
   gameState = null;
-  selectedPlayerCount = 4;
-  setupNames = ["", "", "", ""];
   notice = "";
   const url = new URL(window.location.href);
   url.search = "";
@@ -483,28 +542,16 @@ function resetGame() {
   render();
 }
 
-app.addEventListener("input", (event) => {
-  const input = event.target.closest("[data-name-index]");
-  if (!input) return;
-  setupNames[Number(input.dataset.nameIndex)] = input.value;
-});
-
 app.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
   const { action } = button.dataset;
   notice = "";
   try {
-    if (action === "player-count") {
-      const oldNames = [...setupNames];
-      selectedPlayerCount = Number(button.dataset.count);
-      setupNames = Array.from({ length: selectedPlayerCount }, (_, index) => oldNames[index] ?? "");
-      render();
-      return;
-    }
     if (action === "start-game") {
-      const names = setupNames.slice(0, selectedPlayerCount);
-      gameState = createGame(names, { previousRoomGameSets });
+      if (rosterLoading) throw new Error("Состав игроков ещё загружается.");
+      if (rosterError) throw new Error(rosterError);
+      gameState = createGame(configuredPlayers, { previousRoomGameSets });
       previousRoomGameSets = gameState.roomGameSets;
       persist();
     } else if (action === "begin-investigation") {
@@ -578,3 +625,15 @@ app.addEventListener("click", async (event) => {
 });
 
 render();
+loadConfiguredPlayers()
+  .then((players) => {
+    configuredPlayers = players;
+    rosterError = "";
+    rosterLoading = false;
+    if (!gameState) render();
+  })
+  .catch((error) => {
+    rosterError = error instanceof Error ? error.message : String(error);
+    rosterLoading = false;
+    if (!gameState) render();
+  });
