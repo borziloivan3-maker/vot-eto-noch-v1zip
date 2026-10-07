@@ -10,6 +10,11 @@ PUBLIC_FILES = {
     "game-engine.js", "storage.js", "author/players.json",
 }
 PLAYER_AVATAR_FILES = {f"author/players/{slot}.jpg" for slot in range(1, 7)}
+CASE_START_IMAGE_FILES = {
+    f"author/cases/S{scenario_id:02d}/start-{victim_id}.jpg"
+    for scenario_id in range(1, 6)
+    for victim_id in range(1, 7)
+}
 
 
 class GameHandler(SimpleHTTPRequestHandler):
@@ -24,11 +29,16 @@ class GameHandler(SimpleHTTPRequestHandler):
             self.send_error(404)
             return None
         parts = target.relative_to(ROOT).parts
-        allowed = relative in PUBLIC_FILES or relative in PLAYER_AVATAR_FILES or (
+        allowed = (
+            relative in PUBLIC_FILES
+            or relative in PLAYER_AVATAR_FILES
+            or relative in CASE_START_IMAGE_FILES
+            or (
             len(parts) > 2
             and parts[0] == "games"
             and parts[1] in {"1", "2", "3", "4", "5", "6"}
             and not any(part.startswith(".") for part in parts)
+            )
         )
         if not allowed:
             self.send_error(404)

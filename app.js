@@ -127,6 +127,17 @@ const victim = () => playerById(gameState?.victimId);
 const culprit = () => playerById(gameState?.culpritId);
 const scenario = () => SCENARIOS.find(({ id }) => id === gameState?.scenarioId);
 
+function investigationStartImagePath() {
+  const scenarioFolder = scenario()?.id?.replaceAll("-", "");
+  const activeVictim = gameState?.players.find(
+    ({ id, active }) => id === gameState?.victimId && active,
+  );
+  if (!/^S0[1-5]$/.test(scenarioFolder ?? "") || !/^[1-6]$/.test(activeVictim?.id ?? "")) {
+    return "";
+  }
+  return `./author/cases/${scenarioFolder}/start-${activeVictim.id}.jpg`;
+}
+
 function eventDescription() {
   const event = scenario()?.event;
   if (!event || event.type !== "text") return "";
@@ -231,8 +242,17 @@ function renderSetup() {
 }
 
 function renderBriefing() {
+  const imagePath = investigationStartImagePath();
   return `
-    <section class="content">
+    <section class="content investigation-start-screen">
+      ${imagePath ? `
+        <img
+          class="case-start-image"
+          src="${escapeHTML(imagePath)}"
+          alt="Фотография начала расследования"
+          onerror="this.remove()"
+        />
+      ` : ""}
       <p class="event-description">${escapeHTML(eventDescription())}</p>
       <div class="button-stack">${actionButton("НАЧАТЬ РАССЛЕДОВАНИЕ", "begin-investigation")}</div>
     </section>

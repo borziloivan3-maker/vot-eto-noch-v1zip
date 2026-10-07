@@ -297,6 +297,29 @@ h2 {
   object-fit: cover;
 }
 
+.investigation-start-screen {
+  justify-content: flex-start;
+  padding-top: clamp(12px, 2vh, 28px);
+  padding-bottom: clamp(16px, 3vh, 36px);
+}
+
+.case-start-image {
+  display: block;
+  flex: none;
+  width: 100%;
+  height: min(48svh, 520px);
+  margin: 0 0 clamp(12px, 1.8svh, 18px);
+  border-radius: 14px;
+  background: var(--panel);
+  object-fit: contain;
+  object-position: center;
+}
+
+.investigation-start-screen .button-stack {
+  flex: none;
+  margin-top: clamp(12px, 2vh, 22px);
+}
+
 .section-space { margin-top: 26px; }
 
 .turn-heading {
@@ -398,6 +421,25 @@ h2 {
   .topbar { padding-bottom: 15px; }
   .content { padding: 20px 0 26px; }
   .room-button { min-height: 63px; }
+
+  .app-shell:has(.investigation-start-screen) {
+    min-height: 100svh;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  .app-shell:has(.investigation-start-screen) .topbar { padding-bottom: 8px; }
+  .investigation-start-screen { padding: 4px 0 10px; }
+  .case-start-image {
+    height: min(42svh, 420px);
+    margin-bottom: clamp(8px, 1.5svh, 12px);
+  }
+  .investigation-start-screen .event-description {
+    font-size: clamp(14px, 4.2vw, 17px);
+    line-height: 1.4;
+  }
+  .investigation-start-screen .button-stack {
+    margin-top: clamp(10px, 1.5svh, 16px);
+  }
 
   .app-shell:has(.setup-screen) {
     min-height: 100svh;
