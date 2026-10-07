@@ -212,7 +212,7 @@ function renderSetup() {
     : rosterError
       ? `<p class="notice" role="alert">${escapeHTML(rosterError)}</p>`
       : `
-        <div class="player-roster">
+        <div class="player-roster player-roster--count-${configuredPlayers.length}">
           ${configuredPlayers.map((player) => `
             <div class="player-roster-item">${renderPlayer(player)}</div>
           `).join("")}
@@ -220,7 +220,7 @@ function renderSetup() {
       `;
   const disabled = rosterLoading || Boolean(rosterError) || configuredPlayers.length < 4;
   return `
-    <section class="content">
+    <section class="content setup-screen">
       <div class="eyebrow">Игроки</div>
       <h1>Соберите<br>компанию.</h1>
       <p class="lead">Участники расследования.</p>
