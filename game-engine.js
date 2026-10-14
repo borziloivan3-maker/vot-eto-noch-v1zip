@@ -225,40 +225,76 @@ function renderClueText(template, gameState, recipientId, random) {
     .replaceAll("[СВИДЕТЕЛЬ]", witness.name);
 }
 
-function chooseClueTier(random) {
-  const roll = random() * 100;
-  let cumulative = 0;
-  for (const level of CLUE_LEVELS) {
-    cumulative += level.weight;
-    if (roll < cumulative) return level.id;
+const STAGE_DISTRIBUTIONS = [
+  { neutral: 80, weak: 20 },
+  { neutral: 45, weak: 40, connecting: 15 },
+  { neutral: 20, weak: 35, connecting: 30, strong: 15 },
+  { neutral: 10, weak: 20, connecting: 30, strong: 30, veryStrong: 10 },
+  { neutral: 5, weak: 10, connecting: 20, strong: 40, veryStrong: 25 },
+];
+
+const STAGE_THRESHOLDS = [0, 4, 7, 11, 15];
+
+function stageForClueCount(count) {
+  for (let stage = STAGE_DISTRIBUTIONS.length - 1; stage >= 0; stage -= 1) {
+    if (count >= STAGE_THRESHOLDS[stage]) return stage;
   }
-  return null;
+  return 0;
+}
+
+function chooseClueTier(random, clueCount, lastLevelId, availableLevelIds) {
+  const stage = stageForClueCount(clueCount);
+  const dist = STAGE_DISTRIBUTIONS[stage];
+  const levels = CLUE_LEVELS
+    .filter(({ id }) => dist[id] !== undefined && availableLevelIds.includes(id))
+    .map(({ id }) => ({ id, weight: dist[id] }));
+  if (!levels.length) return null;
+  const sameLevel = levels.find(({ id }) => id === lastLevelId);
+  const otherLevels = levels.filter(({ id }) => id !== lastLevelId);
+  if (sameLevel && otherLevels.length) {
+    for (const lvl of levels) {
+      if (lvl.id === lastLevelId) lvl.weight *= 0.4;
+    }
+  }
+  const total = levels.reduce((sum, lvl) => sum + lvl.weight, 0);
+  const roll = random() * total;
+  let cumulative = 0;
+  for (const lvl of levels) {
+    cumulative += lvl.weight;
+    if (roll < cumulative) return lvl.id;
+  }
+  return levels[levels.length - 1].id;
 }
 
 export function giveClue(gameState, playerId, requestedLevel = null, random = Math.random) {
   const scenario = SCENARIOS.find(({ id }) => id === gameState.scenarioId);
-  const desiredLevel = requestedLevel ?? chooseClueTier(random);
-  if (!desiredLevel) return null;
   const availableAt = (levelId) => [
     ...scenario.clues[levelId],
     ...(levelId === "neutral" ? scenario.clues.neutralCategory ?? [] : []),
   ].filter((clue) => !gameState.usedClues.includes(`${scenario.id}:${clue.id}`));
-  let level = desiredLevel;
+  const stageAllowed = CLUE_LEVELS.map(({ id }) => ({ id, clues: availableAt(id) }))
+    .filter((entry) => entry.clues.length);
+  const availableLevelIds = stageAllowed.map(({ id }) => id);
+  if (!availableLevelIds.length) return null;
+  const lastGiven = gameState.lastClueLevel ?? null;
+  let level = requestedLevel;
+  if (!level || !availableLevelIds.includes(level)) {
+    level = chooseClueTier(random, gameState.usedClues.length, lastGiven, availableLevelIds);
+  }
+  if (!level) return null;
   let pool = availableAt(level);
   if (!pool.length) {
-    const desiredIndex = CLUE_LEVELS.findIndex(({ id }) => id === desiredLevel);
-    const availableLevels = CLUE_LEVELS
-      .map(({ id }, index) => ({ id, index, clues: availableAt(id) }))
+    const candidates = availableLevelIds
+      .map((id) => ({ id, clues: availableAt(id) }))
       .filter(({ clues }) => clues.length)
-      .sort((left, right) => (
-        Math.abs(left.index - desiredIndex) - Math.abs(right.index - desiredIndex)
-      ));
-    if (!availableLevels.length) return null;
-    level = choose(
-      availableLevels.filter(({ index }) => Math.abs(index - desiredIndex)
-        === Math.abs(availableLevels[0].index - desiredIndex)),
-      random,
-    ).id;
+      .sort((a, b) => {
+        const distA = CLUE_LEVELS.findIndex(({ id }) => id === a.id);
+        const distB = CLUE_LEVELS.findIndex(({ id }) => id === b.id);
+        const target = CLUE_LEVELS.findIndex(({ id }) => id === level);
+        return Math.abs(distA - target) - Math.abs(distB - target);
+      });
+    if (!candidates.length) return null;
+    level = candidates[0].id;
     pool = availableAt(level);
   }
   const clue = choose(pool, random);
@@ -268,6 +304,7 @@ export function giveClue(gameState, playerId, requestedLevel = null, random = Ma
     text: renderClueText(clue.text, gameState, playerId, random),
   };
   gameState.usedClues.push(record.id);
+  gameState.lastClueLevel = level;
   gameState.playerClues[playerId] ??= [];
   gameState.playerClues[playerId].push(record);
   const player = gameState.players.find(({ id }) => id === playerId);
