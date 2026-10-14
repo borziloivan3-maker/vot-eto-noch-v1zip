@@ -20,6 +20,7 @@ const stateFromStorage = loadSavedSession();
 let gameState = stateFromStorage.gameState;
 let previousRoomGameSets = stateFromStorage.previousRoomGameSets;
 let isLaunchingMiniGame = false;
+let skipTurnLock = false;
 let configuredPlayers = [];
 let rosterLoading = true;
 let rosterError = "";
@@ -285,6 +286,7 @@ function renderOpponentPicker() {
             <button class="room-button" data-action="select-room" data-id="${id}">${escapeHTML(name)}</button>
           `).join("")}
         </div>
+        <div class="button-stack skip-turn-stack">${actionButton("Следующий игрок", "skip-turn", "secondary-button")}</div>
       </div>
     `;
   }
@@ -597,6 +599,12 @@ app.addEventListener("click", async (event) => {
     } else if (action === "select-room") {
       selectRoom(gameState, button.dataset.id);
       persist();
+    } else if (action === "skip-turn") {
+      if (skipTurnLock || gameState.phase !== "turn" || gameState.selectedRoomId) return;
+      skipTurnLock = true;
+      nextTurn(gameState);
+      persist();
+      setTimeout(() => { skipTurnLock = false; }, 300);
     } else if (action === "change-room") {
       gameState.selectedRoomId = null;
       gameState.selectedOpponentId = null;

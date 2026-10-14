@@ -341,6 +341,7 @@ h2 {
 }
 
 .section-space { margin-top: 26px; }
+.skip-turn-stack { margin-top: clamp(12px, 2vh, 18px); }
 
 .turn-heading {
   display: flex;
