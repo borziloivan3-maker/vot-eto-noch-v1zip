@@ -138,6 +138,17 @@ function investigationStartImagePath() {
   return `./author/cases/${scenarioFolder}/start-${activeVictim.id}.jpg`;
 }
 
+function investigationEndImagePath() {
+  const scenarioFolder = scenario()?.id?.replaceAll("-", "");
+  const activeCulprit = gameState?.players.find(
+    ({ id }) => id === gameState?.culpritId,
+  );
+  if (!/^S0[1-5]$/.test(scenarioFolder ?? "") || !/^[1-6]$/.test(activeCulprit?.id ?? "")) {
+    return "";
+  }
+  return `./author/cases/${scenarioFolder}/end-${activeCulprit.id}.jpg`;
+}
+
 function eventDescription() {
   const event = scenario()?.event;
   if (!event || event.type !== "text") return "";
@@ -450,6 +461,12 @@ function renderCaseReveal(includeReason = false) {
       <p class="event-description">${escapeHTML(eventDescription())}</p>
       <div class="eyebrow section-space">Виновник</div>
       <h2>${renderPlayer(culprit(), "large")}</h2>
+      ${(() => {
+        const endPath = investigationEndImagePath();
+        return endPath
+          ? `<img class="case-end-image" src="${escapeHTML(endPath)}" alt="Фотография финального раскрытия" onerror="this.remove()" />`
+          : "";
+      })()}
       ${includeReason ? `
         <div class="eyebrow section-space">Почему?</div>
         <p class="event-description">${escapeHTML(reasonDescription())}</p>

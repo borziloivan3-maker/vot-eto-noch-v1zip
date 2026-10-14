@@ -15,6 +15,11 @@ CASE_START_IMAGE_FILES = {
     for scenario_id in range(1, 6)
     for victim_id in range(1, 7)
 }
+CASE_END_IMAGE_FILES = {
+    f"author/cases/S{scenario_id:02d}/end-{culprit_id}.jpg"
+    for scenario_id in range(1, 6)
+    for culprit_id in range(1, 7)
+}
 
 
 class GameHandler(SimpleHTTPRequestHandler):
@@ -33,6 +38,7 @@ class GameHandler(SimpleHTTPRequestHandler):
             relative in PUBLIC_FILES
             or relative in PLAYER_AVATAR_FILES
             or relative in CASE_START_IMAGE_FILES
+            or relative in CASE_END_IMAGE_FILES
             or (
             len(parts) > 2
             and parts[0] == "games"

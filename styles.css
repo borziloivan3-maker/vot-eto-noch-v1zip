@@ -305,10 +305,11 @@ h2 {
 
 .case-start-image {
   display: block;
-  flex: none;
+  flex: 1 1 auto;
   width: 100%;
-  height: min(48svh, 520px);
-  margin: 0 0 clamp(12px, 1.8svh, 18px);
+  min-height: 0;
+  max-height: 72svh;
+  margin: 0 0 clamp(10px, 1.5svh, 16px);
   border-radius: 14px;
   background: var(--panel);
   object-fit: contain;
@@ -318,6 +319,25 @@ h2 {
 .investigation-start-screen .button-stack {
   flex: none;
   margin-top: clamp(12px, 2vh, 22px);
+}
+
+.case-end-image {
+  display: block;
+  width: 100%;
+  max-height: 72svh;
+  margin-top: 14px;
+  border-radius: 14px;
+  background: var(--panel);
+  object-fit: contain;
+  object-position: center;
+}
+
+@media (min-width: 421px) {
+  .case-start-image,
+  .case-end-image {
+    max-width: 420px;
+    margin-inline: auto;
+  }
 }
 
 .section-space { margin-top: 26px; }
@@ -430,15 +450,23 @@ h2 {
   .app-shell:has(.investigation-start-screen) .topbar { padding-bottom: 8px; }
   .investigation-start-screen { padding: 4px 0 10px; }
   .case-start-image {
-    height: min(42svh, 420px);
-    margin-bottom: clamp(8px, 1.5svh, 12px);
+    flex: 1 1 auto;
+    max-height: 64svh;
+    margin-bottom: clamp(6px, 1.2svh, 10px);
   }
   .investigation-start-screen .event-description {
+    flex: none;
     font-size: clamp(14px, 4.2vw, 17px);
     line-height: 1.4;
   }
   .investigation-start-screen .button-stack {
-    margin-top: clamp(10px, 1.5svh, 16px);
+    flex: none;
+    margin-top: clamp(8px, 1.2svh, 14px);
+  }
+
+  .case-end-image {
+    max-height: 52svh;
+    margin-top: 10px;
   }
 
   .app-shell:has(.setup-screen) {

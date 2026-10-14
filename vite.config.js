@@ -13,6 +13,7 @@ const ALLOWED_STATIC = [
 for (let s = 1; s <= 5; s++) {
   for (let v = 1; v <= 6; v++) {
     ALLOWED_STATIC.push(`author/cases/S${String(s).padStart(2, "0")}/start-${v}.jpg`);
+    ALLOWED_STATIC.push(`author/cases/S${String(s).padStart(2, "0")}/end-${v}.jpg`);
   }
 }
 
